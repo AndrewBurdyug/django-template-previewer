@@ -11,6 +11,14 @@
         <script type="text/javascript" src="{% static 'js/template_previewer/context.dust.js' %}"></script>
         <script type="text/javascript">
             var parse_url = "{% filter escapejs %}{% url parse %}{% endfilter %}";
+            var template_path = "{{template_path}}";
+            $(function(){
+                $("#id_template").attr('value', template_path);
+                getContext();
+                $(document).on('click', '#preview-submit', function(e){
+                    $("#preview-ui").fadeToggle();
+                });
+            });
         </script>
         <script type="text/javascript" src="{% static 'js/template_previewer/previewer.js' %}"></script>
     </head>
@@ -27,7 +35,7 @@
             </div>
         </div>
         <p id="show-preview"><a href="#">Template previewer ▸</a></p>
-        <iframe id="content-preview" name="content-preview" sandbox="allow-scripts">
+        <iframe id="content-preview" name="content-preview" sandbox="allow-scripts" frameborder="0">
         </iframe>
     </body>
 </html>

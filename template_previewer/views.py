@@ -4,10 +4,12 @@ from django.http import HttpResponse, HttpResponseBadRequest
 from django.views.decorators.http import require_POST, require_GET
 from django.template.response import TemplateResponse
 from django.core.urlresolvers import reverse
-from django.template import Template, Context, loader, TemplateDoesNotExist
+from django.template import Context, loader, TemplateDoesNotExist
+from django.core.exceptions import PermissionDenied
 
 from template_previewer.forms import RenderForm, ParseForm
 from template_previewer.template_parser.context import get_context
+
 
 class ContextItem(object):
     def __init__(self, context_dict):
@@ -59,8 +61,9 @@ def render(request):
     else:
         return HttpResponseBadRequest()
 
-# The following are auxiliar functions to help making the tree out of the 
+# The following are auxiliar functions to help making the tree out of the
 # parsed context in the template
+
 
 def _make_node(name):
     return {
@@ -68,17 +71,21 @@ def _make_node(name):
         "children": []
     }
 
+
 def _lookup(childlist, name):
     for child in childlist:
-        if child["name"] == name: return child
+        if child["name"] == name:
+            return child
     new = _make_node(name)
     childlist.append(new)
     return new
+
 
 def _extend(childlist, path):
     path_items = path.split('.')
     for p in path_items:
         childlist = _lookup(childlist, p)["children"]
+
 
 @require_GET
 def parse(request):
@@ -92,28 +99,39 @@ def parse(request):
         try:
             template = loader.get_template(template_name)
         except TemplateDoesNotExist:
-            return HttpResponse(json.dumps({"error": u"Could not load template '%s'" % template_name}), mimetype="application/json")
+            return HttpResponse(
+                json.dumps({
+                    "error": u"Could not load template '%s'" % template_name
+                }), mimetype="application/json")
         tree = []
         for path in get_context(template):
             _extend(tree, path)
         return HttpResponse(json.dumps(tree), mimetype="application/json")
     else:
-        return HttpResponse(json.dumps({"error": unicode(form.errors)}), mimetype="application/json")
+        return HttpResponse(json.dumps({"error": unicode(form.errors)}),
+                            mimetype="application/json")
+
 
 def preview(request):
     """
     This is the view where the user can select rendering parameters (i.e.
     template+context)
     """
-    form = RenderForm()
-    ctx = {
-        "form": form,
-        "parse_url": reverse(parse),
-        "render_url": reverse(render),
-    }
-    return TemplateResponse(
-        request,
-        "template_previewer/preview.html",
-        ctx
-    )
+    if request.user.is_authenticated() and request.user.is_superuser:
+        form = RenderForm()
+        ctx = {
+            "form": form,
+            "parse_url": reverse(parse),
+            "render_url": reverse(render),
+        }
 
+        template_path = request.GET.get('template', False)
+        if template_path:
+            ctx['template_path'] = template_path
+
+        return TemplateResponse(
+            request,
+            "template_previewer/preview.html",
+            ctx
+        )
+    raise PermissionDenied()
